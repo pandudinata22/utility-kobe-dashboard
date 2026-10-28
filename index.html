@@ -1,11 +1,13 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KOBE Utility Monitoring System</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
     :root {
       --blue: #1565c0;
@@ -48,12 +50,22 @@
     }
 
     .status {
-      background: #dcfce7;
-      color: #166534;
+      background: #e2e8f0;
+      color: #475569;
       border-radius: 20px;
       padding: 8px 13px;
       font-size: 12px;
       font-weight: bold;
+    }
+
+    .status.online {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .status.offline {
+      background: #fee2e2;
+      color: #991b1b;
     }
 
     main {
@@ -80,6 +92,7 @@
       padding: 21px;
       box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
       border: 1px solid #e9eef5;
+      min-width: 0;
     }
 
     .card-label {
@@ -91,11 +104,13 @@
       font-size: 27px;
       font-weight: bold;
       margin: 13px 0 8px;
+      overflow-wrap: anywhere;
     }
 
     .note {
       color: var(--muted);
       font-size: 12px;
+      line-height: 1.5;
     }
 
     .icon {
@@ -142,6 +157,8 @@
       font-size: 13px;
     }
 
+    input { min-width: 180px; }
+
     button {
       background: var(--blue);
       color: white;
@@ -150,6 +167,11 @@
     }
 
     button:hover { opacity: .9; }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
 
     .table-wrap { overflow-x: auto; }
 
@@ -180,6 +202,22 @@
       color: #166534;
     }
 
+    .message {
+      padding: 12px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e40af;
+      font-size: 13px;
+      display: none;
+      overflow-wrap: anywhere;
+    }
+
+    .message.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
     .footer {
       text-align: center;
       padding: 20px;
@@ -200,76 +238,84 @@
     }
   </style>
 </head>
-<body>
 
+<body>
 <header>
   <div>
     <h1>KOBE UTILITY MONITORING SYSTEM</h1>
     <p>Engineering Department · PT Kobe Boga Utama</p>
   </div>
-  <div class="status">● DASHBOARD ONLINE</div>
+  <div id="connectionStatus" class="status">● MENGHUBUNGKAN...</div>
 </header>
 
 <main>
   <h2 class="section-title">Utility Overview</h2>
+
+  <div id="message" class="message"></div>
+
   <div class="grid">
     <div class="card">
       <div class="icon">💧</div>
       <div class="card-label">Water Consumption</div>
-      <div class="value" id="water">125 m³</div>
-      <div class="note">Data contoh pemakaian air</div>
+      <div class="value" id="water">--</div>
+      <div class="note">Pembacaan terbaru dari Supabase</div>
     </div>
 
     <div class="card">
       <div class="icon">🔥</div>
       <div class="card-label">Gas Consumption</div>
-      <div class="value" id="gas">840 m³</div>
-      <div class="note">Data contoh pemakaian gas</div>
+      <div class="value" id="gas">--</div>
+      <div class="note">Pembacaan terbaru dari Supabase</div>
     </div>
 
     <div class="card">
       <div class="icon">⚡</div>
       <div class="card-label">Electricity</div>
-      <div class="value" id="electricity">2.450 kWh</div>
-      <div class="note">Data contoh pemakaian listrik</div>
+      <div class="value" id="electricity">--</div>
+      <div class="note">Pembacaan terbaru dari Supabase</div>
     </div>
 
     <div class="card">
       <div class="icon">⚙️</div>
       <div class="card-label">Preventive Maintenance</div>
-      <div class="value">92%</div>
-      <div class="note">Contoh pencapaian PM</div>
+      <div class="value" id="pm">--</div>
+      <div class="note">Belum terhubung ke data PM</div>
     </div>
   </div>
 
   <div class="layout">
     <div class="panel">
-      <h3>Tren Konsumsi Utility</h3>
+      <h3>Tren Pembacaan Utility</h3>
       <div class="filter">
-        <select id="period" aria-label="Pilih periode grafik">
-          <option value="7">7 hari terakhir</option>
-          <option value="12">12 bulan contoh</option>
+        <select id="chartParameter" aria-label="Parameter grafik">
+          <option value="">Semua parameter numerik</option>
         </select>
+        <button id="refreshBtn">Refresh Data</button>
       </div>
       <div class="chart-wrap">
         <canvas id="utilityChart"></canvas>
       </div>
+      <p class="note">
+        Grafik menampilkan pembacaan terbaru. Gunakan satu parameter
+        untuk membandingkan tren dengan satuan yang sama.
+      </p>
     </div>
 
     <div class="panel">
       <h3>Status Peralatan</h3>
-      <table>
-        <thead>
-          <tr><th>Equipment</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Boiler</td><td><span class="pill">Normal*</span></td></tr>
-          <tr><td>WTP / RO</td><td><span class="pill">Normal*</span></td></tr>
-          <tr><td>Cooling Tower</td><td><span class="pill">Normal*</span></td></tr>
-          <tr><td>Water Pump</td><td><span class="pill">Normal*</span></td></tr>
-        </tbody>
-      </table>
-      <p class="note">*Status contoh, bukan pembacaan aktual.</p>
+      <div class="table-wrap">
+        <table id="equipmentTable">
+          <thead>
+            <tr><th>Equipment</th><th>Pembacaan</th><th>Waktu</th></tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="3">Menunggu data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        Pembacaan terbaru per peralatan, bukan status alarm otomatis.
+      </p>
     </div>
   </div>
 
@@ -277,7 +323,7 @@
     <h3>Data Monitoring Utility</h3>
     <div class="filter">
       <input id="search" type="search"
-        placeholder="Cari peralatan atau parameter..."
+        placeholder="Cari equipment atau parameter..."
         aria-label="Cari data monitoring">
       <button id="exportBtn">Export CSV</button>
     </div>
@@ -291,103 +337,460 @@
             <th>Parameter</th>
             <th>Nilai</th>
             <th>Satuan</th>
-            <th>Status</th>
+            <th>Catatan</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td>Contoh</td><td>Boiler 1</td><td>Pressure</td><td>7.0</td><td>bar</td><td>Contoh</td></tr>
-          <tr><td>Contoh</td><td>RO System</td><td>pH</td><td>6.8</td><td>pH</td><td>Contoh</td></tr>
-          <tr><td>Contoh</td><td>Cooling Tower</td><td>Temperature</td><td>32.5</td><td>°C</td><td>Contoh</td></tr>
-          <tr><td>Contoh</td><td>Water Pump</td><td>Status</td><td>Running</td><td>-</td><td>Contoh</td></tr>
+          <tr><td colspan="6">Memuat data...</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">Data di atas hanya untuk demonstrasi. Belum terhubung ke database.</p>
+    <p id="recordInfo" class="note">Menyiapkan koneksi database...</p>
   </div>
 </main>
 
 <div class="footer">
-  KOBE UTILITY MONITORING SYSTEM · Prototype v1.0
+  KOBE UTILITY MONITORING SYSTEM · GitHub Pages + Supabase
 </div>
 
 <script>
-  const chartData = {
-    "7": {
-      labels: ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
-      water: [110, 125, 118, 130, 122, 115, 125],
-      gas: [790, 820, 810, 850, 830, 800, 840]
-    },
-    "12": {
-      labels: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-               "Jul", "Agu", "Sep", "Okt", "Nov", "Des"],
-      water: [110, 115, 120, 118, 125, 122, 130, 128, 125, 132, 127, 125],
-      gas: [760, 780, 800, 790, 820, 810, 840, 830, 820, 850, 830, 840]
-    }
-  };
+  // ==========================================
+  // 1. KONFIGURASI SUPABASE
+  // ==========================================
 
-  const ctx = document.getElementById("utilityChart");
-  const chart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: chartData["7"].labels,
-      datasets: [
-        {
-          label: "Air (m³)",
-          data: chartData["7"].water,
-          borderColor: "#1565c0",
-          backgroundColor: "#1565c022",
-          fill: true,
-          tension: 0.35
-        },
-        {
-          label: "Gas (m³)",
-          data: chartData["7"].gas,
-          borderColor: "#7c84e8",
-          tension: 0.35
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
+  const SUPABASE_URL = "https://penoydjdxbzbpzyotoyl.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_1NWswtMhniVDWuK3gfSemg_rX2mGTw2";
 
-  document.getElementById("period").addEventListener("change", function () {
-    const selected = chartData[this.value];
-    chart.data.labels = selected.labels;
-    chart.data.datasets[0].data = selected.water;
-    chart.data.datasets[1].data = selected.gas;
-    chart.update();
-  });
+  const connectionStatus = document.getElementById("connectionStatus");
+  const message = document.getElementById("message");
+  const tableBody = document.querySelector("#monitorTable tbody");
+  const equipmentBody = document.querySelector("#equipmentTable tbody");
+  const recordInfo = document.getElementById("recordInfo");
 
-  document.getElementById("search").addEventListener("input", function () {
-    const query = this.value.toLowerCase();
-    document.querySelectorAll("#monitorTable tbody tr").forEach(row => {
-      row.style.display = row.innerText.toLowerCase().includes(query) ? "" : "none";
+  let db = null;
+  let readings = [];
+  let chart = null;
+
+  // ==========================================
+  // 2. FUNGSI UMUM
+  // ==========================================
+
+  function showMessage(text, isError = false) {
+    message.textContent = text;
+    message.className = isError ? "message error" : "message";
+    message.style.display = "block";
+  }
+
+  function hideMessage() {
+    message.style.display = "none";
+  }
+
+  function formatNumber(value) {
+    return new Intl.NumberFormat("id-ID", {
+      maximumFractionDigits: 2
+    }).format(value);
+  }
+
+  function formatDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+
+    return date.toLocaleString("id-ID", {
+      dateStyle: "short",
+      timeStyle: "short"
     });
-  });
+  }
 
-  document.getElementById("exportBtn").addEventListener("click", function () {
-    const rows = [...document.querySelectorAll("#monitorTable tr")];
-    const csv = rows.map(row =>
-      [...row.querySelectorAll("th, td")]
-        .map(cell => '"' + cell.innerText.replace(/"/g, '""') + '"')
-        .join(",")
-    ).join("\r\n");
+  function addCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = value ?? "-";
+    row.appendChild(cell);
+  }
+
+  function normalize(value) {
+    return String(value ?? "").trim().toLowerCase();
+  }
+
+  // ==========================================
+  // 3. INISIALISASI CHART
+  // ==========================================
+
+  function initializeChart() {
+    chart = new Chart(
+      document.getElementById("utilityChart"),
+      {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [{
+            label: "Nilai pembacaan",
+            data: [],
+            borderColor: "#1565c0",
+            backgroundColor: "#1565c022",
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false
+          },
+          scales: {
+            y: { beginAtZero: false }
+          }
+        }
+      }
+    );
+  }
+
+  // ==========================================
+  // 4. LOAD DATA DARI SUPABASE
+  // ==========================================
+
+  async function loadUtilityData() {
+    const refreshButton = document.getElementById("refreshBtn");
+    refreshButton.disabled = true;
+    refreshButton.textContent = "Memuat...";
+
+    try {
+      hideMessage();
+
+      const { data, error } = await db
+        .from("utility_readings")
+        .select("id, equipment, parameter, value, unit, recorded_at, notes")
+        .order("recorded_at", { ascending: false })
+        .limit(1000);
+
+      if (error) throw error;
+
+      readings = data || [];
+
+      connectionStatus.textContent = "● SUPABASE TERHUBUNG";
+      connectionStatus.className = "status online";
+
+      renderTable();
+      renderKPI();
+      renderEquipment();
+      updateParameterOptions();
+      renderChart();
+
+      recordInfo.textContent =
+        "Total " + readings.length +
+        " pembacaan terbaru yang berhasil diambil dari Supabase.";
+
+      if (readings.length === 0) {
+        showMessage(
+          "Koneksi berhasil, tetapi tabel utility_readings masih kosong. Tambahkan data uji di Supabase Table Editor."
+        );
+      }
+
+    } catch (error) {
+      console.error("Supabase error:", error);
+
+      connectionStatus.textContent = "● KONEKSI GAGAL";
+      connectionStatus.className = "status offline";
+
+      showMessage(
+        "Gagal mengambil data: " + error.message +
+        ". Periksa Project URL, publishable key, tabel, koneksi internet, dan policy RLS.",
+        true
+      );
+
+      tableBody.replaceChildren();
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 6;
+      cell.textContent = "Data gagal dimuat.";
+      row.appendChild(cell);
+      tableBody.appendChild(row);
+
+      recordInfo.textContent = "Data belum berhasil dimuat.";
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.textContent = "Refresh Data";
+    }
+  }
+
+  // ==========================================
+  // 5. TABEL MONITORING
+  // ==========================================
+
+  function renderTable() {
+    const query = normalize(document.getElementById("search").value);
+    tableBody.replaceChildren();
+
+    const filtered = readings.filter(item =>
+      normalize(item.equipment).includes(query) ||
+      normalize(item.parameter).includes(query) ||
+      normalize(item.notes).includes(query)
+    );
+
+    if (filtered.length === 0) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 6;
+      cell.textContent = "Tidak ada data yang sesuai.";
+      row.appendChild(cell);
+      tableBody.appendChild(row);
+      return;
+    }
+
+    filtered.forEach(item => {
+      const row = document.createElement("tr");
+
+      addCell(row, formatDate(item.recorded_at));
+      addCell(row, item.equipment);
+      addCell(row, item.parameter);
+      addCell(row, formatNumber(item.value));
+      addCell(row, item.unit);
+      addCell(row, item.notes || "-");
+
+      tableBody.appendChild(row);
+    });
+  }
+
+  // ==========================================
+  // 6. KARTU KPI
+  // ==========================================
+
+  function renderKPI() {
+    // Sesuaikan nama parameter di Supabase agar cocok
+    // dengan kata kunci berikut.
+    const definitions = [
+      {
+        id: "water",
+        keywords: ["water consumption", "pemakaian air", "water usage"],
+        unit: "m³"
+      },
+      {
+        id: "gas",
+        keywords: ["gas consumption", "pemakaian gas", "gas usage"],
+        unit: "m³"
+      },
+      {
+        id: "electricity",
+        keywords: [
+          "electricity consumption",
+          "pemakaian listrik",
+          "energy consumption"
+        ],
+        unit: "kWh"
+      }
+    ];
+
+    definitions.forEach(definition => {
+      const candidates = readings.filter(item =>
+        definition.keywords.some(keyword =>
+          normalize(item.parameter).includes(keyword)
+        )
+      );
+
+      const latest = candidates[0];
+      document.getElementById(definition.id).textContent = latest
+        ? formatNumber(latest.value) + " " + latest.unit
+        : "--";
+    });
+
+    // KPI PM belum dihitung karena belum ada tabel data PM.
+    document.getElementById("pm").textContent = "--";
+  }
+
+  // ==========================================
+  // 7. RINGKASAN PERALATAN
+  // ==========================================
+
+  function renderEquipment() {
+    equipmentBody.replaceChildren();
+
+    const latestByEquipment = new Map();
+
+    readings.forEach(item => {
+      if (!latestByEquipment.has(item.equipment)) {
+        latestByEquipment.set(item.equipment, item);
+      }
+    });
+
+    const equipment = [...latestByEquipment.entries()];
+
+    if (equipment.length === 0) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 3;
+      cell.textContent = "Belum ada data peralatan.";
+      row.appendChild(cell);
+      equipmentBody.appendChild(row);
+      return;
+    }
+
+    equipment.forEach(([name, item]) => {
+      const row = document.createElement("tr");
+      addCell(row, name);
+      addCell(row, formatNumber(item.value) + " " + item.unit);
+      addCell(row, formatDate(item.recorded_at));
+      equipmentBody.appendChild(row);
+    });
+  }
+
+  // ==========================================
+  // 8. FILTER PARAMETER DAN GRAFIK
+  // ==========================================
+
+  function updateParameterOptions() {
+    const select = document.getElementById("chartParameter");
+    const previous = select.value;
+
+    const parameters = [...new Set(
+      readings
+        .filter(item => typeof item.value === "number")
+        .map(item => item.parameter)
+        .filter(Boolean)
+    )];
+
+    select.replaceChildren();
+
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "Semua parameter numerik";
+    select.appendChild(allOption);
+
+    parameters.forEach(parameter => {
+      const option = document.createElement("option");
+      option.value = parameter;
+      option.textContent = parameter;
+      select.appendChild(option);
+    });
+
+    if (parameters.includes(previous)) {
+      select.value = previous;
+    }
+  }
+
+  function renderChart() {
+    if (!chart) return;
+
+    const selected = document.getElementById("chartParameter").value;
+
+    let data = readings.filter(item =>
+      typeof item.value === "number" &&
+      Number.isFinite(item.value)
+    );
+
+    if (selected) {
+      data = data.filter(item => item.parameter === selected);
+    } else {
+      // Jangan mencampur parameter dengan satuan berbeda
+      // dalam satu grafik.
+      const first = data[0];
+      data = first
+        ? data.filter(item =>
+            item.parameter === first.parameter &&
+            item.unit === first.unit
+          )
+        : [];
+    }
+
+    data = data.slice(0, 50).reverse();
+
+    chart.data.labels = data.map(item => {
+      const date = new Date(item.recorded_at);
+      return Number.isNaN(date.getTime())
+        ? "-"
+        : date.toLocaleString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit"
+          });
+    });
+
+    chart.data.datasets[0].label = data.length
+      ? data[0].parameter + " (" + data[0].unit + ")"
+      : "Belum ada data numerik";
+
+    chart.data.datasets[0].data = data.map(item => item.value);
+    chart.update();
+  }
+
+  // ==========================================
+  // 9. EXPORT CSV
+  // ==========================================
+
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    const headers = [
+      "Tanggal", "Equipment", "Parameter",
+      "Nilai", "Satuan", "Catatan"
+    ];
+
+    const rows = readings.map(item => [
+      formatDate(item.recorded_at),
+      item.equipment,
+      item.parameter,
+      item.value,
+      item.unit,
+      item.notes || ""
+    ]);
+
+    const escapeCSV = value =>
+      '"' + String(value ?? "").replace(/"/g, '""') + '"';
+
+    const csv = [headers, ...rows]
+      .map(row => row.map(escapeCSV).join(","))
+      .join("\r\n");
 
     const blob = new Blob(["\uFEFF" + csv], {
       type: "text/csv;charset=utf-8;"
     });
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "utility-monitoring.csv";
+    link.download = "kobe-utility-monitoring.csv";
     link.click();
     URL.revokeObjectURL(url);
   });
+
+  // ==========================================
+  // 10. EVENT DAN STARTUP
+  // ==========================================
+
+  document.getElementById("search")
+    .addEventListener("input", renderTable);
+
+  document.getElementById("chartParameter")
+    .addEventListener("change", renderChart);
+
+  document.getElementById("refreshBtn")
+    .addEventListener("click", loadUtilityData);
+
+  async function startDashboard() {
+    initializeChart();
+
+    if (
+      SUPABASE_URL === "GANTI_DENGAN_PROJECT_URL_SUPABASE" ||
+      !SUPABASE_URL.startsWith("https://") ||
+      !window.supabase
+    ) {
+      connectionStatus.textContent = "● BELUM DIKONFIGURASI";
+      connectionStatus.className = "status offline";
+
+      showMessage(
+        "Masukkan Project URL Supabase yang benar pada bagian konfigurasi index.html."
+      );
+      return;
+    }
+
+    db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+    await loadUtilityData();
+  }
+
+  startDashboard();
 </script>
 </body>
 </html>
